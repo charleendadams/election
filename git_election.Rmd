@@ -1,0 +1,659 @@
+---
+title: "Election Fraud? (Github)"
+author: "Charleen D. Adams"
+date: "November 19, 2020"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+fig_width: 6 
+fig_height: 4 
+editor_options: 
+chunk_output_type: consol
+self_contained: false
+bibliography: C:/Users/charl/Dropbox/election3.bib
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=8)
+```
+
+```{r, include=FALSE}
+setwd('C:/Users/charl/Dropbox/')
+library(tweetrmd)
+library(memoise)
+library(olsrr)
+library(stargazer)
+library(knitr)
+library(xtable)
+library(tidyverse)
+library(rstatix)
+library(ggpubr)
+library(kableExtra)
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(rmarkdown)
+library(ggpubr)
+library(dplyr)
+library(NSM3)
+library(mblm)
+library(foreign)
+library(MASS)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(sfsmisc)
+library(DT)
+library(rsconnect)
+library(sqldf)
+
+colorize <- function(x, color) {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, 
+      x)
+  } else x
+}
+nyt_ts=read.csv('formatted_nyt_new_counts.csv')
+nyt_ts=nyt_ts %>% distinct(votes, new_Biden, new_Trump, .keep_all = TRUE)
+
+a <- ggplot(nyt_ts, aes(x=num_Trump, y=num_Biden)) +
+  geom_point() + 
+  geom_smooth(method=lm, se=FALSE, fullrange=TRUE, col = "red")+
+  theme_classic()
+
+a2=a + #ggtitle("Scatter of number of Trump and Biden votes by day") +
+  xlab("Cumulative number of Trump votes") + ylab("Cumulative number of Biden votes")+
+scale_colour_discrete("Day") + geom_smooth(method = "loess", se=FALSE, fullrange=TRUE)
+
+b <- ggplot(nyt_ts, aes(x=num_Trump, y=num_Biden, color=time_cat)) +
+  geom_point() + 
+  geom_smooth(method=lm, se=FALSE, fullrange=TRUE)+
+  theme_classic()
+
+b2=b + #ggtitle("Scatter of number of Trump and Biden votes by day") +
+  xlab("Cumulative number of Trump votes") + ylab("Cumulative number of Biden votes")+
+scale_colour_discrete("Day")
+
+png("both2.png", width = 8, height = 7, units = 'in', res = 300)
+grid.arrange(a2, b2,
+                top = textGrob("Scatter of votes for Trump and Biden",gp=gpar(fontsize=10,font=2)),
+             ncol = 2, nrow = 1)#3 (italics)
+dev.off()
+```
+<hr style="border:2px solid gray"> </hr>
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+# Public Message
+
+ - Biden had three million more votes than Trump end of November 4th, when ~96% of votes across the country had been tallied. This means the trend in the popular vote was Biden-ward. 
+ - The seemingly restricted range of ratios for the percent share of votes for the candidates after November 4th is normal; it is confined by information about the candidates at the last time point of counting on November 4th, when the ratios were closer than they were for timepoints earlier that day. 
+ - Democrats were more likely to vote by mail; as such, as votes were counted on later days, Biden won a few more states.
+ - No evidence of voter fraud was found in the NYT/"Edison" data.
+</div>
+
+<hr style="border:2px solid grey"> </hr>
+
+# Abstract
+Trump lost the 2020 presidential election, but he has refused to accept that he lost. Instead of conceding the race to Biden and initiating a smooth and peaceful transition of power, Trump has baselessly claimed that there was systematic voting fraud against him. In doing this, he has shaken trust in democracy. In the days following the election, anonymous coders and a prominent ex-academic (Bret Weinstein) spread the idea that votes timestamped (that is, counted) after November 4th show proof of fraud, when more votes in batches went to Biden. The anonymous coders leaked a file they claim to have scraped from the NYT/"Edison" data on voting counts. In a tweet thread by "APhilosophae", they provide scatter plots that show what they claim are "randomly" spread ratios of Biden to Trump votes that then become uniform after November 4th. They insinuate that the so-called pattern of "random" ratios becoming more even is evidence of voter fraud. 
+
+Since the stakes are high -- our democracy is under siege -- it is irresponsible and unethical to let claims of voting fraud go uncontested. As such, I have performed my own analysis, also using the NYT/"Edison" data, even though I can't be sure about the file's integrity. I found evidence that APhilosophae falsely interpreted the data. Biden had more than three million more votes than Trump on November 4th, when ~96% of the country's votes had been tallied. This alone suggests that the thrust in Biden's lead would continue as later-arriving mail-in votes got tallied. In addition to ignoring that Biden had the popular vote on November 4th, APhilosophae appears to have fundamentally misunderstood and misconstrued the nature of the data set. Each observation in the NYT/"Edison" file represents a time when the votes were cumulatively tallied. The percent shares of votes for each candidate were derived from the cumulative counts. Earlier times/batches showed greater differences in the percent shares of votes between the candidates, since earlier time points contained less cumulative information. In scatter plots of the ratios of Biden to Trump votes (y-axis) by time (x-axis), this phenomenon looks like a random spread of ratios on November 4th. But it isn't. Earlier batches (on November 4th) display as bigger differences in the percent share of votes between the candidates. As vote batches from the end of the day were woven in, the differences between the percent shares of votes for the candidates were smaller. These entries counted later in the day display as ratios closer to 1. Given this, we wouldn't expect the differences in the percent shares of votes between candidates to skyrocket on subsequent days, since the percent share of votes depends on the cumulative number of votes already tallied. The range for the ratios on subsequent days was constrained by the information for the candidates at the end of the night on November 4th. It is crucial to see this. 
+
+APhilosophae further claimed that Trump should get more votes than Biden over time, arguing that mail-in ballots would be expected to be from rural areas that are far away from polling centers and take longer to arrive. Implicit to this are that rural voters are more likely to vote for Trump and more likely to vote by mail. However, the latter is incorrect for two reasons: 1) the trend in the popular vote favored Biden early on, and 2) Democrats were more likely to vote last-minute by mail based on years of research covering trends in elections. Given this, the Biden-ward tallies in Pennsylvania and Georgia are ordinary and unremarkable. It would have been a surprise had some states Trump led in initially not gone to Biden.
+
+I found no evidence of voter fraud, but did see an error in how APhilosophae portrayed the nature of cumulative data and conclude that he/she spread a conspiracy theory.
+
+<hr style="border:2px solid gray"> </hr>
+
+# Introduction 
+
+Trump has refused to accept the outcome of the 2020 presidential election and has sown widespread distrust about voting counts, when no evidence has been presented to support this. Adding to the confusion and distrust, anonymous coders have claimed they can prove election fraud using data they allegedly scraped from the NYT/"Edison" data. A Twitter user named "APhilosophae" reported and interpreted the findings in a long Twitter thread that alleges the following:
+
+a) "irregularities" exist in the ratio of number of new votes per candidate, and 
+
+b) these so-called "irregularities" mean later-counted mail-in ballots prove voter fraud. 
+
+Specifically, APhilosophae claimed states that went Biden-ward reflected fraud, alleging mail-in votes should be random and slightly for Trump; therefore, if mail-in ballots reflect a win for Biden, they are fraudulent. The tweet thread is viewable here (http://twitter.com/APhilosophae/status/1325592112428163072). 
+
+<div align="center">
+```{r, layout="l-body-outset", echo=FALSE,warning=FALSE, include=TRUE}
+tweet_embed("https://twitter.com/APhilosophae/status/1325592112428163072")
+tweet_cached <- memoise(tweet_embed, cache = cache_filesystem('.tweets'))
+tweet_shot_cached <- memoise(tweet_screenshot, cache = cache_filesystem('.tweets'))
+
+```
+</div>
+
+Twitter user (handle: "cb_miller_") posted a partial rebuttal (http://twitter.com/cb_miller_/status/1325714414490824704) pointing out that the columns for the percent share of votes per candidate are rounded and that rounding errors may have misled the anonymous coders.
+
+<div align="center">
+
+```{r, layout="l-body-outset", echo=FALSE,warning=FALSE, include=TRUE}
+tweet_embed("https://twitter.com/cb_miller_/status/1325714414490824704")
+tweet_cached <- memoise(tweet_embed, cache = cache_filesystem('.tweets'))
+tweet_shot_cached <- memoise(tweet_screenshot, cache = cache_filesystem('.tweets'))
+```
+
+</div>
+
+So that you can see the data, the table below includes the most relevant columns. "vote-share_rep" and "vote_share_dem" are the percent of votes for each candidate for the given timestamp and state. They are based on the "votes" column, which is cumulative. The cumulative number of votes for each candidate (what I call "num_Trump" and "num_Biden") can be obtained by multiplying "votes" by the variables for the percent shares for each candidate. Note that the point by cb_miller_ about rounding has to do with how the percent of votes for each candidate are rounded. It's easy to see by adding together the percent shares for each candidate that they don't total to 1. This may be partly explained by rounding but may also partly reflect the "votes" variable including votes for Jo Jorgensen and Howie Hawkins. Since no data dictionary came with the file describing the variables, your guess is as good as mine. Whatever the case with the rounding, APhilosophae made interpretative claims that go beyond possible rounding errors. I will address these. 
+
+Of note is that APhilosophae advised his/her audience to download the file and back it up. When I went to the web link he/she provided for the file, the file was no longer available, which is suspicious. The version I acquired was provided in the thread by another member of the public. 
+
+<hr style="border:2px solid grey"> </hr>
+
+<div align="center">
+
+**Relevant variables in the NYT/"Edison" data set**
+</div>
+```{r, layout="l-body-outset", echo=FALSE,warning=FALSE, include=TRUE}
+setwd('C:/Users/charl/Dropbox/')
+nyt=read.csv('nyt_hr2_night_public.csv')
+my_table_cols=c('state','timestamp','votes','vote_share_rep','vote_share_dem' )
+interactive_nyt=nyt[my_table_cols]
+paged_table(interactive_nyt)
+```
+<hr style="border:2px solid gray"> </hr>
+
+I became aware of APhilosophae's Twitter thread with these claims of voter fraud, because Bret Weinstein (Twitter handle: "BretWeinstein"), who has over 420,000 followers, promoted APhilosophae's tweet thread by saying he didn't detect any flaws in the logic.
+
+<div align="center">
+```{r, layout="l-body-outset", echo=FALSE,warning=FALSE, include=TRUE}
+tweet_cached <- memoise(tweet_embed, cache = cache_filesystem('http://twitter.com/BretWeinstein/status/1326252023570812929?s=20'))
+tweet_shot_cached <- memoise(tweet_screenshot, cache = cache_filesystem('http://twitter.com/BretWeinstein/status/1326252023570812929?s=20'))
+tweet_embed("http://twitter.com/BretWeinstein/status/1326252023570812929?s=20")
+
+```
+</div>
+
+This promotion is striking on multiple accounts, not the least of which is that APhilosophae ended his/her tweet thread with a hashtag about Epstein not killing himself (http://twitter.com/APhilosophae/status/1325603136128552960)! 
+
+<div align="center">
+```{r, layout="l-body-outset", echo=FALSE,warning=FALSE, include=TRUE}
+tweet_cached <- memoise(tweet_embed, cache = cache_filesystem('http://twitter.com/APhilosophae/status/1325603136128552960'))
+tweet_shot_cached <- memoise(tweet_screenshot, cache = cache_filesystem('http://twitter.com/APhilosophae/status/1325603136128552960'))
+tweet_embed("http://twitter.com/APhilosophae/status/1325603136128552960")
+
+```
+</div>
+
+Thus, the analysis was promoted and spread by someone who either espouses conspiracy theories or jokes about them, while claiming the US presidential election was rigged in favor of Biden. That should've been a red flag for Bret Weinstein. As should've been the fact that the analysis was reported behind a pseudonym, supposedly scraped from the NYT's proprietary data, and distributed widely with scatter plots mixed with conspiracy theory. In data science, the norm is transparency; it's not kosher to popularize analyses anonymously with data that may or may not be fabricated, especially on matters of worldwide public interest, safety, and policy.  
+
+Weinstein is a former evolutionary biology professor. Forced out of academia in 2017 by mobs of students at Evergreen State College, he could be described as counter-counter-elite, which is a description that builds on Peter Turchin's understanding that adademia now produces a counter-elite class (http://www.theatlantic.com/magazine/archive/2020/12/can-history-predict-future/616993/) [@turchin_election]. Academics are the elites, though most of us rarely see ourselves that way. As with others who are more-or-less centrists in their thinking, Weinstein has opposed the counter-elites (the "regressive leftists"), making him counter-counter elite. However, because he is no longer a professor and is making a living on academia's culture wars, he is not objective. His audience is largely right-wingers, who, like most of the general population, lack statistical training. In the name of purportedly understanding "existential risk", Weinstein, who is not trained in data science, appears to have converted his incomprehension into support for unverified "anomalies" at a time when lies about voter fraud and irregularities are undermining belief in our democracy. Although Weinstein acknowledged the argument about rounding, as Uri Harris has pointed out, the end result is that Weinstein increased suspicion (http://twitter.com/safeortrue/status/1326619235758583808). 
+
+<div align="center">
+```{r, layout="l-body-outset", echo=FALSE,warning=FALSE, include=TRUE}
+tweet_embed("http://twitter.com/safeortrue/status/1326619235758583808")
+```
+</div>
+
+Weinstein's original tweet saying he didn't see any flaws in APhilosophae's logic spread (as we shall see) an unfounded tale to many who would not have otherwise seen it, myself included. Further, Weinstein's partial retraction is buried in the thread, which means many will not have seen the issue about rounding, leaving them to think they got valid insider knowledge about election fraud. Also, unfortunately, as helpful as the argument is about rounding, it doesn't fully address the errors APhilosophae made. Thus, for the few who did see the buried tweet acknowledging rounding issues, it likely didn't ring as a credible or complete refutation. 
+
+APhilosophae masqueraded conspiracy theory as data science, presumably because few would take the time to refute a statistical analysis. Although there is no way of knowing whether the data APhilosophae provided isn't in some way faked, I treated the leaked NYT/"Edison" data as if it were real and did my own analysis. I was motivated to do this because letting a potential conspiracy theory about voting fraud go unchallenged at this time is irresponsible and unethical, especially as I have some training in data science that could help quell the confusion. As Rebecca Goldstein and the Talmud have pointed out, we are responsible for each other. I did not do this analysis as part of my day job. The analysis here has not been sent to a journal. I did it for the public to prevent further damage to our democracy.
+
+<hr style="border:2px solid gray"> </hr>
+
+# Methods and Results
+
+What I'd like to do now is walk you through what I've done and show you what I see. I did *NOT* attempt to replicate what APhilosophae did. For instance, APhilosophae appears to have transformed the cumulative counts per candidate into variables for the number of *new* counts added at each time. Since this was a derivation of variables, I stayed with the cumulative counts and did the analysis I would do if I had written a grant to examine the data. 
+
+First, I looked at the data in both Excel and R (R is statistical software). I removed duplicate entries and time points with zero votes. (Data cleaning is normal.) Second, I constructed models. In particular, I made multivariable linear regression models that looked at the number of Biden votes predicted by the number of Trump votes, when adjusting for time in days. I took the "timestamp" variable and collapsed it into a categorical variable for days 11-3, 11-4, 11-5, 11-6, and 11-7 ("Day" in the scatterplot below on the right). In the regression models, each time point is compared to 11-3 as the reference (at least in the models including all states.) The figure has two panels. The panel on the left gives us a non-parametric curve through the plots (in blue) and a linear predicted line in red. The panel on the right shows the same scatter plot, but identifies the day on which the observations were timestamped.  
+
+<div align="center">
+**Scatter plots: left panel with loess and linear prediction lines; right panel with timestamped observations by day**
+
+</div>
+```{r echo=FALSE, out.width="100%", fig.align='center'}
+knitr::include_graphics("C:/Users/charl/Dropbox/scatter_trump_biden.png") #png saved as res=300
+```
+
+<hr style="border:2px solid gray"> </hr>
+Relevant here is that APhilosophae ran a median-based regression and does not appear to have dealt with time in his/her models, as least from what I can deduce from the scatter plots posted online, which are labeled with the "Theil-Senn Estimator". They don't appear to have considered the ratio of votes for the candidates when adjusting for time. But doing so is important, since some states, such as Florida, only have timestamps for 11-4. As such, it is important to equalize time and see how the share of votes relate to each other. 
+
+Below are the results for the model of cumulative Trump votes predicting cumulative Biden votes, when accounting for time in days. The coefficient "num_Trump" shows that there were 1.03 more Biden votes per Trump votes across the country.
+
+Since some may ask or be thinking about this: 
+
+ - I also ran the simple linear regression without time and compared the simple and multivariable models. In doing this, I saw that the ratios changed only minusculely. This means that time is not a big driver of the relationship between the shares of votes for the candidates.
+ - I also added an interaction term to the multivariable model to assess whether the ratio of candidate votes depends on time. It doesn't, when looking across all states.
+ - I considered using robust linear regression to give a penalized weight to each potential outlier. However, that defeats the purpose, since I want to look at observations that might be weird. (Robust linear regression would be similar to the median-based estimator used by APhilosophae, only it permits adjustment by covariates.)
+
+<hr style="border:2px solid gray"> </hr> 
+
+<div align="center"> 
+**Multivariable model results**
+</div>
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+all_linearMod_num_MLR<- lm(num_Biden ~ num_Trump +factor(time_cat), data=nyt_ts)  
+```
+<div align="center">
+
+```{r message=FALSE, results='asis', echo=FALSE,warning=FALSE, include=TRUE} 
+all_linearMod_num_MLR<- lm(num_Biden ~ num_Trump +factor(time_cat), data=nyt_ts)  
+stargazer(all_linearMod_num_MLR, type = "html", digits = 2)
+```
+</div>
+
+<hr style="border:2px solid gray"> </hr>
+
+**Cook's distance**
+
+Whenever linear regression models are done, we look for outliers. This is especially needed in this case, since the number of cumulative Trump votes and the number of cumulative Biden votes are non-normally distributed and may not conform to the assumptions required for linear models. We can exploit this to see if something wonky is going in our data here. 
+
+One way to do this is to look at the residuals (the vertical distances between the observed values and the regression line). We could also surmise that there might be some outliers by looking back again at the scatterplot above: see the points in olive and teal that wander upwards away from the others? Whether or not these adversely affect the model or are true outliers is something we'll look at now.
+
+An extension of looking at the residuals is to calculate "Cook's distance". Cook's distance is a combination of each observation's leverage and residual values; the higher the leverage and residuals, the higher the Cook's distance. An observation with a Cook's distance greater than 1 is generally considered to be an influential outlier (http://conservancy.umn.edu/handle/11299/37076) [@residuals_election]. None of the observations in the "Edison" data fit this criteria. The maximum Cook's distance is 0.015 (with a mean of 0.0001).  
+
+A Cook's distance greater than 4/n (where n=number of observations in the data; here it's 8213) can also be used, however, to investigate possible outliers. I did that. There were 341 observations to visually eyeball.  
+
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+nyt_ts$id=rownames(nyt_ts)
+d1 <- cooks.distance(all_linearMod_num_MLR)
+r <- stdres(all_linearMod_num_MLR)
+a <- cbind(nyt_ts, d1, r)
+a2=a[d1 > 4/8213, ]
+rabs <- abs(r)
+a <- cbind(nyt_ts, d1, r, rabs)
+asorted <- a[order(-rabs), ]
+asorted$diff=abs((asorted$vote_share_rep)-(asorted$vote_share_dem))
+asorted$diff_cat=ifelse(asorted$diff>=mean(asorted$diff), "high", "low")
+asorted$outlier=ifelse(asorted$id %in% a2$id, "outlier", "normal")
+asorted$more=ifelse(asorted$num_Trump>asorted$num_Biden,"Trump_more", "Biden_more")
+asorted_try=asorted %>%
+     group_by(state) %>%
+     slice(which.max(num_Biden))
+
+asorted$max=ifelse(asorted$id %in% asorted_try$id, "max", "other")
+```
+
+What states contain observations with potential outliers? APhilosophae pointed to Pennsylvania and Wisconsin as having likely mail-in voter fraud, with allegedly "weird" observations in the later days of the voting counts. However, see below: these states don't even populate as potential wannabe outliers! Moreover, the lion's share of these interesting observations occur early on, likely representing either in-person votes or ballots mailed far in advance and counted on November 4th.  
+
+<div align="center">
+
+**"Outlier" states by day of timestamp**
+
+</div>
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+a2$state=droplevels(a2$state)
+dt=table(a2$state, a2$time_cat)
+kbl(dt, caption = "", booktabs = T)%>%kable_styling(latex_options =c("striped", "hold_position"))
+```
+
+So what can we learn about this? First, these observations aren't true outliers, since their Cook's distances were small. Second, since a timestamping on or after November 5th might be a reasonable proxy for mail-in ballots, there is no evidence of mail-in voter fraud: the bulk of whatever is special about these observations happened on November 4th. (While there were a few, there was no enrichment of "weird" observations on November 6th and 7th.) 
+
+<hr style="border:2px solid gray"> </hr>
+
+**Different metric: ratio of Biden/Trump votes**
+
+Further to this point, if we look, not at the cumulative votes, but at the ratio of the percent shares of Biden/Trump votes by day, the biggest gains in Biden's favor occurred on November 4th. The red line in the scatter plot below is set at 1. The points below 1 represent those observations for which Trump had a greater percent share of the votes. Be careful when looking at the plot: note that the y-axis represents the magnitude of the ratios, not the number of votes. 
+
+We can't see it this in the plot, but on November 4th, Trump was ahead in 27 states (Biden was ahead in 23), and there were 1463 more ratios in favor of Trump than Biden. (The Trump-favoring ratios are tightly packed between 0 and 1 and, thus, the density of them can't be readily seen in the plot.) 
+
+On November 5th, the pattern reverses: there were 92 more ratios for Biden than Trump. And on November 6th and 7th, respectively, there were 161 and 66 more ratios in Biden's favor. By the end of the election, two states, Pennsylvania and Georgia, had more overall votes for Biden. The candidates each had 25 states by popular vote end of November 7th (I will return to this in the **Discussion**). 
+
+Three important points: 
+
+ >1. The seemingly restricted range for ratios after November 4th is due to smaller differences in the percent shares between candidates at the end of the day on November 4th.
+ >2. That there were more ratios favoring Trump on November 4th does not mean he had more overall votes that day (he didn't).
+ >3. Although Trump had won more states on November 4th, he had lost the popular vote. This means that the country's trend was for Biden and that, as more votes got counted, it was more likely that Biden would win. 
+
+<div align="center">
+**Biden/Trump ratios by Day**
+</div>
+```{r echo=FALSE, out.width="100%", fig.align='center', fig.cap = ""}
+knitr::include_graphics("C:/Users/charl/Dropbox/no_title_us_ratios_day.jpg") #png saved as res=300
+```
+
+<hr style="border:2px solid gray"> </hr>
+
+**Pennsylvania**
+
+The figure below displays the data for Pennsylvania. It includes work by APhilosophae (left panel) and me (right panel). The same pattern is observed, despite slightly different metrics and scaling for the axes: some timepoints on November 4th had big differences in the percent shares of votes between the candidates and, on subsequent days, the differences were less extreme.
+<div align="center">
+
+**Biden/Trump ratios by Day for Pennsylvania**
+</div>
+```{r echo=FALSE, out.width="100%", fig.align='center'}
+knitr::include_graphics("C:/Users/charl/Dropbox/combined_AP_penn_annotated2.png") #png saved as res=300
+```
+
+APhilosophae claimed that it was an "irregularity" for the ratios to have gotten more moderate over time. He/she also claimed that the ratios early on were due to randomness. That's an incorrect interpretation of the data. At some time points (the **earlier ones**), the difference in the percent shares of votes was big! This doesn't show randomness. This is a reflection of having less information. For instance, on November 4th, earlier timestamps were more likely to have greater percent differences in the vote shares between the candidates. As more votes were tallied, the differences were less extreme, since the percent shares is based on the cumulative votes. That makes sense, right? By the end of the day on November 4th, most of the information for the country was in. Given that the data are cumulative, we'd expect the magnitude of the differences in vote shares to be smaller and less messy than for the earliest timestamps. 
+
+**Dichotomized differences in percent vote shares by a timestamp early or late on November 4th in Pennsylvania** 
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+setwd('C:/Users/charl/Dropbox/')
+nyt_hr=read.csv('asorted_NEW_full_data_hour.csv')
+nyt_hr <- nyt_hr[c(2:27)]
+colnames(nyt_hr)[26] <- "asynchronous_timestamp"
+nyt_hr$ratio=nyt_hr$vote_share_dem/nyt_hr$vote_share_rep
+nyt_hr$diff_cat=ifelse(nyt_hr$diff_cat=="high", "Big difference (>= than the mean)", "Not big")
+
+penn=nyt_hr[which(nyt_hr$state=="pennsylvania"),]
+penn=penn[order(penn$timestamp),]
+
+penn_4th=penn[which(penn$time_cat=="4-Nov"),]
+early_penn4=rownames(penn_4th)[1:184]
+penn_4th$time_binary_penn4=ifelse(rownames(penn_4th) %in% early_penn4, "early in Day on Nov 4", "late in Day on Nov 4")
+
+time_binary_diff_cat_penn_4th=table(penn_4th$time_binary_penn4, penn_4th$diff_cat)
+kbl(time_binary_diff_cat_penn_4th, caption = "", booktabs = T)%>%kable_styling(latex_options =c("striped", "hold_position"))
+```
+
+**What if we stopped the counting on November 4th?**
+
+If we ignore all votes timestamped after the November 4th, who would win? Since APhilosophae used a median-based tool to project about the election, let's look first at test of the medians for November 4th. The median cumulative number of votes for Trump was 740,463 (IQR = 1,274,340), whereas the median cumulative number of votes for Biden was 670,044 (IQR = 1,369,323). The Wilcoxon test, which uses the median instead of the mean, showed that the difference was significant (*P* < 0.0318, effect size r = 0.0182) in Trump's favor. **But this is wildly misleading.** Biden got more total votes across the country at the end of November 4th! See the plot below. The statistics for the Wilcoxon (median-based) test are provided above it, for pedagogical purposes, which I will soon discuss. The graph itself shows that there were a lot of votes for Biden -- into the sky. The medians for both candidates were similar, with Trump's slightly larger, but the maximum number of votes were not! Trump's median count was higher, but Biden's maximum count was a lot higher. In the end, we care about the **maximum** in an election.
+
+<div align="center">
+```{r, echo=FALSE,warning=FALSE, include=FALSE}
+setwd('C:/Users/charl/Dropbox/')
+nyt_hr=read.csv('asorted_NEW_full_data_hour.csv')
+nyt_hr <- nyt_hr[c(2:27)]
+colnames(nyt_hr)[26] <- "asynchronous_timestamp"
+nyt_hr$ratio=nyt_hr$vote_share_dem/nyt_hr$vote_share_rep
+
+####Ratio of Biden/Trump vote shares by Day
+c <- ggplot(nyt_hr, aes(x=time_cat, y=ratio)) +
+  geom_point() + 
+  geom_smooth(method=lm, se=FALSE, fullrange=TRUE, col = "red")+
+  theme_classic()
+c + #ggtitle("Scatter of number of Trump and Biden votes by day") +
+  xlab("Timestamp by Day") + ylab("Ratio of Biden/Trump votes")+
+scale_colour_discrete("Day") + geom_smooth(method = "loess", se=FALSE, fullrange=TRUE)
+
+#### Plot for Penn
+nyt_hr$ratio_cat=ifelse(nyt_hr$ratio>3 | nyt_hr$ratio<0.7, "big", "small")
+penn=nyt_hr[which(nyt_hr$state=="pennsylvania"),]
+
+penn=penn[order(penn$timestamp),]
+early=rownames(penn)[1:254]
+penn$time_binary=ifelse(rownames(penn) %in% early, "early in Day on Nov 4", "late in Day on Nov 4")
+time_binary_diff_cat=table(penn$time_binary, penn$diff_cat)
+time_binary_diff_cat_chisq=fisher.test(time_binary_diff_cat)
+time_binary_diff_cat_chisq$stres
+time_binary_diff_cat_chisq
+
+#####
+nyt_hr$asynchronous_timestamp=ifelse(nyt_hr$asynchronous_timestamp=="weird", "asynchronous_timestamp", "normal")
+nov4=nyt_hr[which(nyt_hr$time_cat=="4-Nov"),]
+
+nov4=nov4[order(nov4$timestamp),]
+dim(nov4)
+6981/2
+
+early_nov4=rownames(nov4)[1:3491]
+nov4$time_binary=ifelse(rownames(nov4)%in% early_nov4, "early", "late")
+nov4_early_diff=table(nov4$time_binary, nov4$diff_cat)
+nov4_early_diff_chisq=chisq.test(nov4_early_diff)
+nov4_early_diff_chisq
+nov4_early_diff_chisq$stdres
+nov4=nov4[order(nov4$timestamp),]
+
+nyt_hr_bid=aggregate(num_Biden~state, nyt_hr, function(x) c(max(x)))
+max_nyt_hr_bid=sum(nyt_hr_bid$num_Biden)
+nyt_hr_trump=aggregate(num_Trump~state, nyt_hr, function(x) c(max(x)))
+max_nyt_hr_trump=sum(nyt_hr_trump$num_Trump)
+max_nyt_hr_bid+max_nyt_hr_trump#144427503
+
+bid2=aggregate(num_Biden~state, nov4, function(x) c(max(x)))
+max_Biden=sum(bid2$num_Biden)
+max_Biden# 70,800,371
+
+trump2=aggregate(num_Trump~state, nov4, function(x) c(max(x)))
+max_Trump=sum(trump2$num_Trump)
+#max_Trump# 67,631,150
+
+max_Biden>max_Trump
+max_Biden-max_Trump#3169221
+max_Biden+max_Trump#138431520
+#79554046	+73610952
+
+myvar=c("num_Biden")
+nov4_biden=nov4[myvar]
+myvar_t=c("num_Trump")
+nov4_Trump=nov4[myvar_t]
+colnames(nov4_Trump)[1] <- "candidate_votes"
+colnames(nov4_biden)[1] <- "candidate_votes"
+nov4_Trump$candidate=0
+nov4_biden$candidate=0
+nov4_Trump$candidate="Trump"
+nov4_biden$candidate="Biden"
+cand_votes=rbind(nov4_Trump,nov4_biden)
+
+cand_votes %>%
+  group_by(candidate) %>%
+  get_summary_stats(candidate_votes, type = "median_iqr")
+
+bxp <- ggboxplot(
+  cand_votes, x="candidate", y = "candidate_votes",
+  ylab = "Cumulative number of votes for Trump for Nov 4th", xlab = "Cumulative number of votes for Biden for November 4th", add = "jitter"
+  )
+bxp
+
+stat.test <- cand_votes %>%
+  wilcox_test(candidate_votes ~ candidate) %>%
+  add_significance()
+stat.test
+
+cand_votes %>% wilcox_effsize(candidate_votes ~ candidate)
+
+stat.test <- stat.test %>% add_xy_position(x = "candidate")
+bxp +
+  stat_pvalue_manual(stat.test, tip.length = 0) +
+  labs(subtitle = get_test_label(stat.test, detailed = TRUE))
+
+#nov5
+nov5=nyt_hr[which(nyt_hr$time_cat=="5-Nov"),]
+nov5=nov5[order(nov5$timestamp),]
+
+bid2_nov5=aggregate(num_Biden~state, nov5, function(x) c(max(x)))
+max_Biden_nov5=sum(bid2_nov5$num_Biden)
+max_Biden_nov5
+
+trump2_nov5=aggregate(num_Trump~state, nov5, function(x) c(max(x)))
+max_Trump_nov5=sum(trump2_nov5$num_Trump)
+max_Trump_nov5
+
+max_Biden_nov5>max_Trump_nov5
+abs(max_Biden_nov5-max_Trump_nov5)
+
+max_Biden_nov5+max_Trump_nov5
+#108,441,280
+
+#nov6
+nov6=nyt_hr[which(nyt_hr$time_cat=="6-Nov"),]
+nov6=nov5[order(nov6$timestamp),]
+
+bid2_nov6=aggregate(num_Biden~state, nov6, function(x) c(max(x)))
+max_Biden_nov6=sum(bid2_nov6$num_Biden)
+max_Biden_nov6
+
+trump2_nov6=aggregate(num_Trump~state, nov6, function(x) c(max(x)))
+max_Trump_nov6=sum(trump2_nov6$num_Trump)
+max_Trump_nov6
+
+max_Biden_nov6>max_Trump_nov6
+abs(max_Biden_nov6-max_Trump_nov6)
+
+#nov7
+nov7=nyt_hr[which(nyt_hr$time_cat=="7-Nov"),]
+nov7=nov7[order(nov7$timestamp),]
+
+bid2_nov7=aggregate(num_Biden~state, nov7, function(x) c(max(x)))
+max_Biden_nov7=sum(bid2_nov7$num_Biden)
+max_Biden_nov7
+
+trump2_nov7=aggregate(num_Trump~state, nov7, function(x) c(max(x)))
+max_Trump_nov7=sum(trump2_nov7$num_Trump)
+max_Trump_nov7
+
+max_Biden_nov7>max_Trump_nov7
+abs(max_Biden_nov7-max_Trump_nov7)
+max_Biden_nov7+max_Trump_nov7
+```
+</div>
+
+<div align="center">
+
+**November 4th**
+</div>
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+stat.test <- stat.test %>% add_xy_position(x = "candidate")
+  bxp +
+   stat_pvalue_manual(stat.test, tip.length = 0) +
+labs(subtitle = get_test_label(stat.test, detailed = TRUE))
+```
+
+At the end of November 4th, ~96% of the votes across the country had been tallied (138,431,520/144,427,503), and Biden had 3,169,221 more votes than Trump. You can get a sense of that in the plot above. 
+
+Ignoring electoral college criteria, Biden was ahead by a lot on November 4th. Biden had the popular vote early on! We don't need to run predictions to see this. We can just tally the votes. However, for the sake of consistency, see how similar the linear regression results are to the multivariable model including time (scroll above a few paragraphs). The ratio for the number of Biden votes predicted by the number of Trump votes is 1.03 for November 4th. This is the same as in the model when time in days is included.
+
+<div align="center">
+
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+mod <- lm(num_Biden ~ num_Trump, data = nov4)
+tab_model(mod)
+
+```
+</div>
+
+A median-based tool, such as the Wilcoxon test or APhilosophae's Theil-Senn estimator gives the **false** impression that Trump should have won on November 4th. In fact, Biden was beating Trump! You might be picking up on this, but a reason one might want to use the median might be if one wanted to ignore/mask/remove votes that favored the candidate getting more! Given Biden's country-wide lead on November 4th, it isn't surprising that a few states (Pennsylvania and Georgia) went to Biden as more votes were counted. 
+
+<hr style="border:2px solid gray"> </hr>
+**Back to the flagged observations and the comparisons of the cumulative votes** 
+
+Now that we have established that Biden was actually ahead on November 4th, I'd like to return to the discussion about potential "outliers". It occurred to me that California and Texas (the "outliers" for November 4th) were likely to go Blue and Red, respectively. To examine this, I used the variable that captured the difference between the share of Republic and Democratic votes for each observation. Even without performing a statistical test, it is easy to see that the flagged observations for California and Texas have big differences in the share of votes between candidates, favoring Biden and Trump respectively. For all states, I dichotomized the differences in the percent shares at the mean and tabulated the results by whether an observation was one of these interesting ("outlier") observations (chi-squared = 6905.6, df = 1, *P* < 2.2e-16).
+
+<div align="center">
+**Difference in candidates' percent votes by "outlier" status** 
+</div>
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+asorted$diff_cat=ifelse(asorted$diff_cat=="high", "Big difference (>= than the mean)", "Not big")
+out_diff=table(asorted$outlier, asorted$diff_cat)
+kbl(out_diff, caption = "", booktabs = T)%>%kable_styling(latex_options =c("striped", "hold_position"))
+```
+
+<hr style="border:2px solid gray"> </hr>
+
+Recall that there were no smoking-gun outliers and that the "outliers" category referred to in the table captures observations that had larger Cook's distance values. None had truly large Cook's distances, and there was no enrichment of "outliers" for later-arriving mail-in votes. The closest thing we get to outliers in our data are for the observations that captured big differences between the candidates. Most of this happened early on. The differences in the share of votes between the candidates was smaller over time. Formally testing the relationship of the differences in the percent shares between candidates across time shows it's a significant relationship (tabulation below: chi-squared = 23.087, df = 4, *P* = 0.0001). 
+
+<div align="center">
+**Difference in candidates' percent share of votes by day**
+</div>
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+time_diff=table(asorted$diff_cat, asorted$time_cat)
+kbl(time_diff, caption = "", booktabs = T)%>%kable_styling(latex_options =c("striped", "hold_position"))
+chi_time_diff=chisq.test(time_diff)
+```
+
+I've provided the residuals below, which can aid the interpretation. When the value of the standardized residual is lower than -2, the cell contains fewer observations than expected. When the value is higher than 2, the cell contains more observations than expected. The residuals demonstrate the nature of cumulative data. As more counts were added, the differences between the candidates became less extreme, as can be seen in comparing the residuals for November 3rd and November 7th. 
+
+<div align="center">
+**Residuals**
+</div>
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+chi_time_diff_rounded=round(chi_time_diff$stdres, 2)
+kbl(chi_time_diff_rounded, caption = "", booktabs = T)%>%kable_styling(latex_options =c("striped", "hold_position"))
+```
+<hr style="border:2px solid gray"> </hr>
+
+**APhilosophae's metric**
+
+As mentioned above, APhilosophae (or whoever did the original analysis) had looked at a slightly different metric than the cumulative votes per candidate. He/she appears to have transformed the cumulative number of counts per candidate, using subtraction, to derive the number of new votes per candidate at each time period by state. I also created these variables. In the process of doing this, I noticed some observations that eluded my initial data cleaning. I had removed two duplicates and observations with zero total votes, but I didn't remove observations for which later timestamps showed fewer cumulative votes than the just-previous timstamp. If there are "irregularities" in the "Edison" data, these are the candidates! Notably, they were not detected with statistics but by looking closely at the timestamp and votes columns. 
+
+The observations that have a timestamp later in time but have smaller numbers of cumulative votes (the "votes" variable) are, indeed, strange. There were 52 such observations.
+
+Take a look. Here are four entries for Florida. The third has the asynchronous timestamp. 
+
+
+<div align="center">
+**Example of asynchronous timestamp entry**
+</div>
+```{r, layout="l-body-outset", echo=FALSE,warning=FALSE, include=TRUE}
+setwd('C:/Users/charl/Dropbox/')
+nyt_hr=read.csv('asorted_NEW_full_data_hour.csv')
+nyt_hr <- nyt_hr[c(2:27)]
+colnames(nyt_hr)[26] <- "asynchronous_timestamp"
+nyt_hr$asynchronous_timestamp=ifelse(nyt_hr$asynchronous_timestamp=="weird", "asynchronous_timestamp", "normal")
+fl=nyt_hr[which(nyt_hr$state=='florida'),]
+fl=fl[order(fl$timestamp),]
+fl<- fl[87:90,]
+
+my_table_cols2=c('asynchronous_timestamp',
+                 'timestamp','votes','vote_share_rep','vote_share_dem', 'new_Trump', 'new_Biden' )
+interactive_fl=fl[my_table_cols2]
+interactive_fl %>%
+  kbl() %>%
+  kable_paper(full_width = T) %>%
+     #kable_paper("striped", full_width = F) %>%
+         row_spec(3:3, bold = T, color = "white", background = "#D7261E")
+```
+
+
+The fact that these exist in this data set, is not, however proof of fraud. In order for that to be likely, these asynchronous timestamps would need to differentially benefit one of the candidates and possibly change the fate of the election. As it happens, if we tally the number of new votes each candidate lost at these asynchronous timestamps, Biden lost 1,410,477 and Trump lost only 500,496! These, are, of course, non-sensical numbers; the votes aren't, in reality, missing. But if they were real (they aren't) the "irregularities" would've disproportionately injured Biden (chi-squared = 180.88, df = 1, *P* < 2.2e-16).
+
+<hr style="border:2px solid gray"> </hr>
+<div align="center">
+**asynchronous timestamp status by who "lost" more votes**
+</div>
+
+```{r, echo=FALSE,warning=FALSE, include=TRUE}
+setwd('C:/Users/charl/Dropbox/')
+nyt_hr=read.csv('asorted_NEW_full_data_hour.csv')
+nyt_hr <- nyt_hr[c(2:27)]
+nyt_hr$more_Trump_loss=ifelse(abs(nyt_hr$new_Trump)>abs(nyt_hr$new_Biden),"Trump lost more votes","Biden lost more votes")
+colnames(nyt_hr)[26] <- "asynchronous_timestamp"
+nyt_hr$asynchronous_timestamp=ifelse(nyt_hr$asynchronous_timestamp=="weird", "asynchronous_timestamp", "normal")
+asychronous_who=table(nyt_hr$asynchronous_timestamp, nyt_hr$more_Trump_loss)
+kbl(asychronous_who, caption = "", booktabs = T)%>%kable_styling(latex_options =c("striped", "hold_position"))
+asychronous_who=chisq.test(asychronous_who)
+```
+
+<hr style="border:2px solid gray"> </hr>
+
+What does this mean? *Bupkis*! Nothing. APhilosophae created variables for the new votes added for each candidate based on the order of the timestamps. This means that APhilosophae's variables are non-sensical for these entries, if he/she didn't catch this first. 
+
+The asynchronous timestamps appear to be artefacts of how the "Edison" data were worked with at the NYT or invented by the anonymous coders. Whatever the case, they undermine APhilosophae's case that the election was rigged for Biden. 
+
+<hr style="border:2px solid gray"> </hr>
+
+# Discussion
+
+APhilosophae claimed that mail-in ballots should make the ratios of votes for the candidates random, since mail is (allegedly) randomized before arrival at polling centers. He/she highlighted plots for various states that show an apparent random addition of new votes early on for each candidate. APhilosophae further claimed that ballots mailed in by rural voters would be expected to be for Trump and that late-counted ballots would be expected to be from rural-living voters. He/she argued that any evidence in the data to the contrary is evidence of fraud. That is, if mail-in ballots timestamped after November 4th shifted the election in Biden's favor, this must be evidence of fraud. 
+
+We do not need to analyze the data to counter this unfounded assertion. Democrats embrace voting by mail more earnestly than Republicans (http://www.theatlantic.com/ideas/archive/2020/08/brace-blue-shift/615097/) [@grahm_atlantic] and are known to vote later (http://nymag.com/intelligencer/2020/08/why-do-the-last-votes-counted-skew-democratic.html)[@intelligencer_election]. Democrats outpace Republicans in returning mail ballots by about two-fold (http://abcnews.go.com/Politics/battleground-states-process-mail-ballots-delayed-results/story?id=73717671) [@abc_election]. For example, in 2018, Democrats won close U.S. House races in California, with late-counted mail-in ballots obliterating GOP leads. This phenomenon is known as "Blue Shift" and is the new norm (http://abcnews.go.com/Politics/battleground-states-process-mail-ballots-delayed-results/story?id=73717671) [@abc_election]. About California's 2018 election, then-Speaker Paul Ryan exasperated: "California just defies logic to me. We were only down 26 seats the night of the election and three weeks later, we lost basically every contested California race" (http://www.theatlantic.com/ideas/archive/2020/08/brace-blue-shift/615097/) [@grahm_atlantic]. 
+
+APhilosophae's assertions about "randomness" and subsequent "anomalous evenness" rely on a misunderstanding of cumulative data. Moreover, given Biden's lead in the popular vote and that Republicans were less likely to vote by mail, most late-counted votes would be expected to veer Biden-ward based on trends in urban voters.  
+
+To conclude, I didn't see any evidence that late-counted votes were among possible outliers in the leaked "Edison" data. I did see a pattern, readily apparent for California and Texas, where early-counted votes were enriched for those with big percent differences in vote counts for the candidates. I also saw some asynchronous timestamps in the "Edison" file that may have made APhilosophae's variables for new counts added for each candidate spurious, if he/she wrote a script to create the variables without looking closely. I did not see any indication of fraud against Trump in the data set.
+
+Biden won the election. It appears that APhilosophae, Bret Weinstein, and the anonymous coders have promoted conspiracy theories.
+
+<hr style="border:2px solid gray"> </hr>
+
+# Download 
+
+This text file I worked with is downloadable (http://github.com/charleendadams/election).
+
+It's a cleaned version of the one a user provided in APhilosophae's tweet thread (with duplicates and empty fields removed) and has the columns I created for Cook's distance for my multivariable models. It still has the 52 timestamped observations with fewer vote counts than the time before. 
+
+<hr style="border:2px solid gray"> </hr>
+
+# Questions
+
+**Questions about this analysis can be directed to:**
+
+<p style="text-align: center;"><a href="http://www.charadams.com/">Charleen D. Adams, PhD MPH </a></p>
+<p style="text-align: center;"><span style="color: #808080;"><em>cdadams@hsph.harvard.edu</em></span></p>
+
+<hr style="border:2px solid gray"> </hr>
+
+
+# References 
